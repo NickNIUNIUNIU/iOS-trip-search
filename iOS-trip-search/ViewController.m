@@ -22,6 +22,12 @@
 
 #import "AddressSettingViewController.h"
 
+#import "OLACircleAnimateAnnotation.h"
+#import "OLACircleAnimateAnnotationView.h"
+#import "UIView+Visuals.h"
+#import "UIView+OLAExtension.h"
+#import "OLACustomBoubleView.h"
+
 #define kTableViewMargin    8
 #define kNaviBarHeight      60
 #define kLocationButtonHeight      48
@@ -69,10 +75,32 @@ typedef NS_ENUM(NSInteger, CurrentAddressSettingType)
 @property (nonatomic, strong) MAPointAnnotation *startAnnotation;
 @property (nonatomic, strong) MAPointAnnotation *endAnnotation;
 
+@property (nonatomic, strong) OLACircleAnimateAnnotation *circleAnimationAnnotation;
+
+
+@property (nonatomic ,weak) NSTimer *timer;
+
+@property (nonatomic ,strong) OLACustomBoubleView *label2;
+
 @end
 
 @implementation ViewController
-
+//添加雷达动画
+-(void)addCircleAnimationAnnotationWithCoordinate:(CLLocationCoordinate2D)coordinate
+{
+    if(!self.circleAnimationAnnotation){
+        self.circleAnimationAnnotation = [[OLACircleAnimateAnnotation alloc] initWithCoordinate:coordinate];
+    }
+    [self.mapView addAnnotation:self.circleAnimationAnnotation];
+    //    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    //        [self removeCircleAnimationAnnotation];
+    //    });
+}
+//移除雷达动画
+-(void)removeCircleAnimationAnnotation{
+    [self.mapView removeAnnotation:self.circleAnimationAnnotation];
+    self.circleAnimationAnnotation = nil;
+}
 - (void)viewDidLoad {
     [super viewDidLoad];
     // Do any additional setup after loading the view, typically from a nib.
@@ -90,11 +118,21 @@ typedef NS_ENUM(NSInteger, CurrentAddressSettingType)
     [self initControlButtons];
     
     self.regeoSearchNeeded = YES;
+
+    
+    
 }
+
+
+
+
 
 - (void)viewDidAppear:(BOOL)animated
 {
     [super viewDidAppear:animated];
+    //[self.mapView addAnnotation:self.olaAnim];
+//    self.timer = [NSTimer scheduledTimerWithTimeInterval:0.3 target:self selector:@selector(updateTitlelabel) userInfo:nil repeats:YES];
+//    [self.timer setFireDate:[NSDate distantPast]];
 }
 
 - (void)didReceiveMemoryWarning {
@@ -103,6 +141,23 @@ typedef NS_ENUM(NSInteger, CurrentAddressSettingType)
 }
 
 #pragma mark - initialization
+
+-(void)updateTitlelabel{
+    
+    [self.label2 sizeToFitTitle:[NSString stringWithFormat:@"哈哈哈%d",arc4random_uniform(10000)]];
+    
+  
+}
+
+-(OLACustomBoubleView *)label2{
+    if(!_label2){
+        _label2 = [[OLACustomBoubleView alloc]init];
+        _label2.backgroundColor = [[UIColor redColor] colorWithAlphaComponent:0.5];
+        [_label2 sizeToFitTitle:@"asdnajsdkasdja"];
+    }
+    return _label2;
+}
+
 
 - (void)initMapView
 {
@@ -247,6 +302,8 @@ typedef NS_ENUM(NSInteger, CurrentAddressSettingType)
     [buttonLocation addTarget:self action:@selector(onLocationAction:) forControlEvents:UIControlEventTouchUpInside];
     
 }
+
+
 
 - (MAPointAnnotation *)startAnnotation
 {
@@ -404,6 +461,7 @@ typedef NS_ENUM(NSInteger, CurrentAddressSettingType)
         annotation.coordinate = location.coordinate;
         
         [self.mapView addAnnotation:annotation];
+//        [self addCircleAnimationAnnotationWithCoordinate:location.coordinate];
     }
     
     if (self.locationView.startLocation && self.locationView.endLocation) {
@@ -426,6 +484,7 @@ typedef NS_ENUM(NSInteger, CurrentAddressSettingType)
     if (type == CurrentGetLocationTypeStart) {
         self.locationView.startLocation = location;
         [self addPositionAnnotation:self.startAnnotation forLocation:location];
+        [self addCircleAnimationAnnotationWithCoordinate:location.coordinate];
     }
     else {
         self.locationView.endLocation = location;
@@ -667,6 +726,7 @@ typedef NS_ENUM(NSInteger, CurrentAddressSettingType)
 - (void)resultListView:(MySearchResultView *)listView didPOISelected:(MyLocation *)poi
 {
     [self setLocation:poi forType:self.currentLocationType];
+    
     [[MyRecordManager sharedInstance] addHistoryRecord:poi];
     
     [self hideCityListView];
@@ -751,6 +811,22 @@ typedef NS_ENUM(NSInteger, CurrentAddressSettingType)
         return nil;
     }
     
+    if ([annotation isKindOfClass:[OLACircleAnimateAnnotation class]])
+    {
+        static NSString *animatedAnnotationIdentifier = @"AnimatedAnnotationIdentifier";
+        
+        OLACircleAnimateAnnotationView *annotationView = (OLACircleAnimateAnnotationView *)[mapView dequeueReusableAnnotationViewWithIdentifier:animatedAnnotationIdentifier];
+        
+        if (annotationView == nil)
+        {
+            annotationView = [[OLACircleAnimateAnnotationView alloc] initWithAnnotation:annotation
+                                                                        reuseIdentifier:animatedAnnotationIdentifier];
+            
+        }
+        
+        return annotationView;
+    }
+    
     if ([annotation isKindOfClass:[MAPointAnnotation class]])
     {
         static NSString *pointReuseIndetifier = @"pointReuseIndetifier";
@@ -758,11 +834,20 @@ typedef NS_ENUM(NSInteger, CurrentAddressSettingType)
         if (annotationView == nil)
         {
             annotationView = [[MAAnnotationView alloc] initWithAnnotation:annotation reuseIdentifier:pointReuseIndetifier];
-            
-            annotationView.canShowCallout = NO;
+            annotationView.canShowCallout = YES;
         }
         
         annotationView.image = (annotation == self.startAnnotation) ? [UIImage imageNamed:@"default_navi_route_startpoint"] : [UIImage imageNamed:@"default_navi_route_endpoint"];
+        
+        UILabel *label = [[UILabel alloc]init];
+        [annotationView addSubview:label];
+        NSString *str = (annotation == self.startAnnotation)?self.locationView.startLocation.name:self.locationView.endLocation.name;
+        
+        
+        [annotationView addSubview:self.label2];
+        annotation.title = str;
+        label.text = str;
+        [label sizeToFit];
         annotationView.centerOffset = CGPointMake(0, -10);
         
         return annotationView;
@@ -771,6 +856,8 @@ typedef NS_ENUM(NSInteger, CurrentAddressSettingType)
     return nil;
 
 }
+
+
 
 #pragma mark - AddressSettingViewControllerDelegate
 
